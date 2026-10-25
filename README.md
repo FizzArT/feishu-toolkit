@@ -217,6 +217,70 @@ GitHubNotifier(WebhookNotifier(webhook)).notify_event(event)
 
 ---
 
+## 统一标签规范（GitHub 各项目）
+
+适配器靠 **labels（标签）** 识别类型 / 优先级 / 状态 / 终端。为让所有项目零配置即可同步，
+约定每个仓库使用下面这套**统一标签**。标签名建议使用下列英文规范名（稳定、跨项目通用），
+mapper 同时兼容中文别名。
+
+### 1. 必选：类型（决定进哪张表）
+
+| 标签 | 含义 | 映射去向 | 推荐颜色 |
+|---|---|---|---|
+| `bug` | 缺陷 / 故障 | **Bug 管理** | `D73A4A` 红 |
+| `enhancement` | 功能增强 / 需求 | **需求管理** | `A2EEEF` 青 |
+| `documentation` | 文档 | **需求管理**（文档） | `0075CA` 蓝 |
+
+> 三个都没有时默认按「需求管理」处理；标题含「缺陷」字样也会识别为 Bug。
+
+### 2. 必选：优先级
+
+| 标签 | 含义 | 映射 | 推荐颜色 |
+|---|---|---|---|
+| `P0` | 紧急 / 最高 | P0 | `B60202` 深红 |
+| `P1` | 中（**默认**） | P1 | `FBCA04` 黄 |
+| `P2` | 低 | P2 | `0E8A16` 绿 |
+
+> 兼容 `priority:high` / `high` / `urgent`、`priority:medium` / `medium`、`priority:low` / `low`。
+
+### 3. 可选：状态（Issue 仍 open 时用于推断阶段）
+
+| 标签 | 需求状态 | Bug 状态 | 推荐颜色 |
+|---|---|---|---|
+| `todo` | 待启动 | 未解决 | `F9D0C4` |
+| `wip` | 开发中 | 修复中 | `CCCCCC` |
+| `review` | 验收中 | 待验收 | `1D76DB` |
+
+> 一旦 Issue 被关闭，状态自动置为「已完成 / 已关闭」，无需标签。
+
+### 4. 可选：终端（Bug 用）
+
+| 标签 | 终端 | 推荐颜色 |
+|---|---|---|
+| `web` | Web / 网页 | `C5DEF5` |
+| `ios` | iOS（iPhone / iPad） | `C5DEF5` |
+| `android` | Android / 安卓 | `3DD47E` |
+| `windows` | Windows | `5319E7` |
+| `mac` | Mac / macOS | `006B75` |
+
+### 一键应用到某个仓库
+
+把下面脚本中的 `OWNER/REPO` 改成目标仓库，运行即可批量创建上述标签（已存在的会更新为标准颜色）：
+
+```bash
+gh api 'repos/OWNER/REPO/labels' --method POST -f name='bug' -f color='D73A4A' -f description='缺陷：进 Bug 管理'
+gh api 'repos/OWNER/REPO/labels' --method POST -f name='enhancement' -f color='A2EEEF' -f description='功能增强：进需求管理'
+gh api 'repos/OWNER/REPO/labels' --method POST -f name='documentation' -f color='0075CA' -f description='文档：进需求管理'
+gh api 'repos/OWNER/REPO/labels' --method POST -f name='P0' -f color='B60202' -f description='紧急 / 最高优先级'
+gh api 'repos/OWNER/REPO/labels' --method POST -f name='P1' -f color='FBCA04' -f description='中优先级（默认）'
+gh api 'repos/OWNER/REPO/labels' --method POST -f name='P2' -f color='0E8A16' -f description='低优先级'
+```
+
+> 标签名在 mapper 中大小写不敏感；中文别名（缺陷 / 紧急 / 高、中、低 等）已内置识别，
+> 历史项目无需强制改名也能同步，只是建议逐步统一。
+
+---
+
 ## 飞书侧前置准备
 
 1. 在 [飞书开放平台](https://open.feishu.cn) 创建**企业自建应用**，获取 **App ID / App Secret**；
