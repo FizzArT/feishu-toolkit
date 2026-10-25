@@ -17,3 +17,9 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# Local scratch / verification scripts
+_*.py
+_*.sh
+_*.json
+_*.txt

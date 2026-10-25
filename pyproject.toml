@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "飞书集成工具（Feishu Toolkit）：飞书开放平台 Python SDK，首批提供多维表格（Bitable）与标准看板能力"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "FizzArT" }]
 keywords = ["feishu", "lark", "bitable", "飞书", "多维表格", "sdk"]
 classifiers = [
@@ -17,7 +17,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
