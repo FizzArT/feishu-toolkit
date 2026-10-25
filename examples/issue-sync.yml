@@ -1,7 +1,7 @@
 # GitHub Issue → 飞书多维表格 同步示例
 #
 # 使用方法：
-# 1. 复制本文件为 .github/workflows/issue-sync.yml（去掉 .example 后缀）；
+# 1. 复制本文件到目标仓库的 .github/workflows/issue-sync.yml；
 # 2. 在仓库 Settings → Secrets and variables → Actions 添加：
 #      FEISHU_APP_ID
 #      FEISHU_APP_SECRET

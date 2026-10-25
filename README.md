@@ -201,7 +201,7 @@ client.records.create(app_token, table["table_id"], {
    - `FEISHU_APP_ID`
    - `FEISHU_APP_SECRET`
    - `FEISHU_APP_TOKEN`（目标看板的 app_token）
-2. 参考本仓库的示例工作流：[`.github/workflows/issue-sync.yml.example`](./.github/workflows/issue-sync.yml.example)。
+2. 参考本仓库的示例工作流：[`examples/issue-sync.yml`](./examples/issue-sync.yml)，复制到目标仓库的 `.github/workflows/issue-sync.yml`。
 
 ---
 
