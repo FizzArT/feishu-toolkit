@@ -1,0 +1,74 @@
+# GitHub Issue 事件 → 飞书群即时通知示例
+#
+# 与 issue-sync.yml 的区别：
+# - issue-sync.yml 是「全量同步到多维表格」（可能更新很多条）；
+# - 本工作流是「单次事件即时通知」，GitHub 触发什么动作就发什么卡片，
+#   精确、不会重复。
+#
+# 两种发送方式（二选一）：
+#
+# 方式 A：自定义群机器人（最简单，无需应用权限）
+#   1. 群设置 → 机器人 → 添加「自定义机器人」→ 复制 webhook；
+#   2. 添加 Secret：FEISHU_WEBHOOK_URL。
+#
+# 方式 B：应用身份（需应用开通 IM 权限、发布版本、加进群）
+#   1. 开发者后台 → 权限管理，开通：
+#        im:message（或 im:message:send_as_bot）
+#   2. 启用「机器人」能力并发布新版本；
+#   3. 把应用加进目标群，拿到 chat_id；
+#   4. 添加 Secret：FEISHU_APP_ID、FEISHU_APP_SECRET、FEISHU_CHAT_ID。
+
+name: Notify GitHub Issue to Feishu
+
+on:
+  issues:
+    types: [opened, reopened, closed, edited, labeled, unlabeled, assigned, unassigned]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install feishu-toolkit
+        run: |
+          python -m pip install --upgrade pip
+          pip install "git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.0"
+
+      - name: Send card to Feishu
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from feishu_toolkit import FeishuClient
+          from feishu_toolkit.notifier import WebhookNotifier, GitHubNotifier
+
+          # GitHub 自动注入本次事件的完整 payload
+          event_path = os.environ.get("GITHUB_EVENT_PATH")
+          with open(event_path, "r", encoding="utf-8") as f:
+              event = json.load(f)
+
+          webhook = os.environ.get("FEISHU_WEBHOOK_URL")
+          if webhook:
+              # 方式 A：群机器人
+              notifier = WebhookNotifier(webhook)
+              GitHubNotifier(notifier).notify_event(event)
+          else:
+              # 方式 B：应用身份
+              client = FeishuClient(
+                  os.environ["FEISHU_APP_ID"],
+                  os.environ["FEISHU_APP_SECRET"],
+              )
+              gh = client.github_notifier()
+              gh.notify_event(event, receive_id=os.environ["FEISHU_CHAT_ID"])
+          PY

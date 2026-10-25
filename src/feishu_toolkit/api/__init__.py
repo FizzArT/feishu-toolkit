@@ -2,6 +2,7 @@
 
 from .bases import BaseAPI
 from .fields import FieldAPI, FieldType
+from .messages import MessageAPI, MessageType, ReceiveIDType
 from .records import RecordAPI
 from .tables import TableAPI
 from .views import ViewAPI, ViewType
@@ -14,4 +15,7 @@ __all__ = [
     "RecordAPI",
     "ViewAPI",
     "ViewType",
+    "MessageAPI",
+    "MessageType",
+    "ReceiveIDType",
 ]

@@ -3,6 +3,8 @@
 > 飞书开放平台（open.feishu.cn）的 **Python 工具包**，把飞书各项能力封装成可复用、可安装、可测试的 SDK。
 >
 > **首批能力：多维表格（Bitable）** —— 提供 Base / Table / Field / Record / View 的创建、编辑、写入，以及一套**标准化的「需求 + Bug 看板」模板**，可直接把 GitHub Issue 同步成飞书看板。
+>
+> **通知能力：消息 / 卡片推送** —— 支持应用身份与自定义群机器人两种方式，可把 GitHub Issue 事件以交互卡片即时推送到飞书群。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -33,10 +35,11 @@
 | 标准看板模板 | 固定字段、单选项、数字配色、视图（表格 / 看板 / 甘特 / 表单） |
 | GitHub 适配器 | GitHub Issue → 标准字段（分类 / 状态 / 优先级 / 版本 / 终端 / 人员） |
 | 同步服务 | 幂等 `upsert`（按 Issue 编号），批量按表分组 |
+| 消息 / 通知 | 应用身份（IM API）与自定义群机器人（webhook），文本 / 交互卡片 |
+| GitHub 事件通知 | Issue 事件 → 交互卡片（按动作配色，含状态 / 优先级 / 跳转按钮） |
 
 ### 路线图
 
-- 应用消息 / 自定义机器人推送（含群通知）
 - 云文档（Docs）、电子表格（Sheets）
 - 日历（Calendar）、任务（Task）、审批（Approval）
 - 通讯录（Contact）、云空间（Drive）
@@ -123,6 +126,40 @@ client.records.create(app_token, table["table_id"], {
 })
 ```
 
+### 4. 推送通知到飞书群
+
+**方式 A：自定义群机器人（最简单，无需应用权限）**
+
+```python
+from feishu_toolkit.notifier import WebhookNotifier
+
+notifier = WebhookNotifier("https://open.feishu.cn/open-apis/bot/v2/hook/xxxx")
+notifier.send_text("构建完成 ✅")
+notifier.send_card(card)   # card 为交互卡片 dict
+```
+
+**方式 B：应用身份（需应用开通 IM 权限、加进群）**
+
+```python
+# 发文本 / 卡片到群（chat_id），也可发个人（open_id）
+client.notifier.send_text("oc_xxx", "构建完成")
+client.notifier.send_card("oc_xxx", card)
+```
+
+**GitHub Issue 事件 → 交互卡片**
+
+```python
+# 应用身份
+gh = client.github_notifier()
+gh.notify_event(event, receive_id="oc_xxx")   # event 为 GitHub issues webhook payload
+
+# 群机器人
+from feishu_toolkit.notifier import GitHubNotifier
+GitHubNotifier(WebhookNotifier(webhook)).notify_event(event)
+```
+
+卡片按动作自动配色：新建=绿、完成=绿、不计划关闭=灰、重开=橙、打标签=青、指派=紫；正文含状态、优先级、标签、负责人和「查看 Issue」按钮。
+
 ---
 
 ## 标准看板规范
@@ -184,24 +221,42 @@ client.records.create(app_token, table["table_id"], {
 
 1. 在 [飞书开放平台](https://open.feishu.cn) 创建**企业自建应用**，获取 **App ID / App Secret**；
 2. 开通**多维表格**相关权限（`bitable:app` 等读写 scope）；
-3. **发布应用版本**（草稿状态的应用无法调用）；
-4. 权限说明：
+3. 若要用**应用身份发消息**：
+   - 开通 IM 权限（`im:message` 或 `im:message:send_as_bot`）；
+   - 启用「**机器人**」能力并发布新版本；
+   - 把应用加进目标群（应用需在群内且有发言权限）。
+4. **发布应用版本**（草稿状态的应用无法调用）；
+5. 权限说明：
    - **应用自己通过 API 创建的 Base，应用自动拥有全部权限**，无需额外授权；
    - 若要访问「他人手动创建的 Base」，需把应用加为该 Base 的协作者（高级权限表授予「可管理」）。
+
+> 不想给应用开 IM 权限？可以直接用**自定义群机器人**：群设置 → 机器人 → 添加「自定义机器人」→ 复制 webhook，无需应用、无需发布。
 
 > 安全：凭证请通过环境变量 / CI Secrets 注入，**不要硬编码进代码**。
 
 ---
 
-## 用 GitHub Actions 自动同步
+## 用 GitHub Actions 自动同步 / 通知
 
-在你的目标仓库中通过 webhook 触发同步（Issue 新建 / 重开 / 关闭 / 打标签）。
+有两个示例工作流，可单独使用，也可一起用：
 
-1. 在目标仓库 **Settings → Secrets and variables → Actions** 添加：
-   - `FEISHU_APP_ID`
-   - `FEISHU_APP_SECRET`
-   - `FEISHU_APP_TOKEN`（目标看板的 app_token）
-2. 参考本仓库的示例工作流：[`examples/issue-sync.yml`](./examples/issue-sync.yml)，复制到目标仓库的 `.github/workflows/issue-sync.yml`。
+| 示例 | 作用 | 触发 |
+|---|---|---|
+| [`examples/issue-sync.yml`](./examples/issue-sync.yml) | 全量同步 Issue 到多维表格看板 | Issue 事件 + 手动 |
+| [`examples/issue-notify.yml`](./examples/issue-notify.yml) | 单次事件即时推送交互卡片到群 | Issue 事件 |
+
+**同步看板**需要的 Secrets：
+
+- `FEISHU_APP_ID`、`FEISHU_APP_SECRET`
+- `FEISHU_APP_TOKEN`（目标看板的 app_token）
+- 可选 `FEISHU_USER_MAP`（GitHub login → open_id）
+
+**群通知**二选一：
+
+- 群机器人：`FEISHU_WEBHOOK_URL`（最简单，无需权限）；
+- 应用身份：`FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`FEISHU_CHAT_ID`。
+
+把示例文件复制到目标仓库的 `.github/workflows/` 即可。
 
 ---
 
@@ -217,9 +272,10 @@ feishu-toolkit/
 │   ├── http.py            # 请求 / 重试 / 分页
 │   ├── errors.py          # 统一异常
 │   ├── cell_value.py      # 单元格值构造
-│   ├── api/               # 资源层：base/table/field/record/view
+│   ├── api/               # 资源层：base/table/field/record/view/message
 │   ├── templates/         # 标准看板模板 + 看板服务
-│   └── adapters/          # GitHub Issue 适配器 + 同步服务
+│   ├── adapters/          # GitHub Issue 适配器 + 同步服务
+│   └── notifier/          # 卡片构建 + 通知器（应用 / webhook）
 └── tests/                 # 单元测试
 ```
 

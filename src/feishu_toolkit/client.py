@@ -8,9 +8,10 @@ from typing import Optional
 from .auth import TokenManager
 from .errors import FeishuConfigError
 from .http import HttpClient
-from .api import BaseAPI, FieldAPI, RecordAPI, TableAPI, ViewAPI
+from .api import BaseAPI, FieldAPI, MessageAPI, RecordAPI, TableAPI, ViewAPI
 from .templates import BoardService
 from .adapters import GitHubIssueSync, IssueMapperConfig
+from .notifier import GitHubNotifier, Notifier
 
 DEFAULT_BASE_URL = "https://open.feishu.cn"
 
@@ -57,13 +58,26 @@ class FeishuClient:
         self.fields = FieldAPI(self._http)
         self.records = RecordAPI(self._http)
         self.views = ViewAPI(self._http)
+        self.messages = MessageAPI(self._http)
 
         # 高层服务：标准看板
         self.issue_board = BoardService(self)
 
+        # 通知器（应用身份）
+        self._notifier = Notifier(self)
+
     def github_issue_sync(self, board_ref, *, config: Optional[IssueMapperConfig] = None) -> GitHubIssueSync:
         """针对某个标准看板构建 GitHub Issue 同步器。"""
         return GitHubIssueSync(self, board_ref, config=config)
+
+    def github_notifier(self, *, config: Optional[IssueMapperConfig] = None) -> GitHubNotifier:
+        """构建 GitHub Issue 事件通知器（应用身份，发群用 chat_id）。"""
+        return GitHubNotifier(self._notifier, config=config)
+
+    @property
+    def notifier(self) -> Notifier:
+        """应用身份通知器（可发文本 / 卡片到群或个人）。"""
+        return self._notifier
 
     @property
     def http(self) -> HttpClient:
