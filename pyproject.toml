@@ -30,6 +30,9 @@ dev = [
     "pytest-cov>=5.0",
 ]
 
+[project.scripts]
+feishu-toolkit = "feishu_toolkit.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/FizzArT/feishu-toolkit"
 Repository = "https://github.com/FizzArT/feishu-toolkit"

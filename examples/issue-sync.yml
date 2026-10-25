@@ -1,28 +1,34 @@
-# GitHub Issue → 飞书多维表格 同步示例
+# GitHub Issue → 飞书多维表格（标准需求/Bug 看板）同步
 #
-# 使用方法：
-# 1. 复制本文件到目标仓库的 .github/workflows/issue-sync.yml；
-# 2. 在仓库 Settings → Secrets and variables → Actions 添加：
-#      FEISHU_APP_ID
-#      FEISHU_APP_SECRET
-#      FEISHU_APP_TOKEN      目标看板的 app_token
-#    可选：
-#      FEISHU_USER_MAP       GitHub login → open_id 的 JSON，如
-#                            {"alice":"ou_xxx","bob":"ou_yyy"}
-# 3. 本工作流会在 Issue 新建 / 重开 / 关闭 / 打标签时触发。
+# 两种触发：
+#   1. Issue 事件（新建 / 编辑 / 重开 / 关闭 / 打标签等）：只同步这一条，秒级；
+#   2. 手动 workflow_dispatch 或定时 schedule：全量兜底（open + closed）。
+#
+# 使用：
+#   1. 复制到目标仓库 .github/workflows/issue-sync.yml；
+#   2. Settings → Secrets and variables → Actions 添加：
+#        FEISHU_APP_ID       必填
+#        FEISHU_APP_SECRET   必填
+#        FEISHU_APP_TOKEN    必填，目标看板 app_token
+#        FEISHU_USER_MAP     可选，JSON：{"github_login":"本应用 open_id"}
+#   注意：open_id 必须是「当前这个自建应用」视角下的 open_id（跨应用不可用）；
+#   未配置 user_map 的人员字段会自动跳过，不影响同步。
 
 name: Sync GitHub Issues to Feishu
 
 on:
   issues:
-    types: [opened, reopened, closed, edited, labeled, unassigned]
-  workflow_dispatch: {}   # 支持手动全量同步
+    types: [opened, edited, reopened, closed, assigned, unassigned, labeled, unlabeled]
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 */6 * * *"   # 每 6 小时全量兜底，按需调整
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
       issues: read
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,59 +41,67 @@ jobs:
       - name: Install feishu-toolkit
         run: |
           python -m pip install --upgrade pip
-          pip install "git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.0"
-          pip install requests
+          pip install "git+https://github.com/FizzArT/feishu-toolkit.git@main"
 
-      - name: Fetch issues and sync to Feishu
+      - name: Prepare issue payload (single event)
+        if: github.event_name == 'issues'
         env:
-          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
-          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
-          FEISHU_APP_TOKEN: ${{ secrets.FEISHU_APP_TOKEN }}
-          FEISHU_USER_MAP: ${{ secrets.FEISHU_USER_MAP }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE: ${{ toJson(github.event.issue) }}
         run: |
           python - <<'PY'
-          import json
-          import os
-          import requests
-          from feishu_toolkit import FeishuClient
-          from feishu_toolkit.adapters import IssueMapperConfig
+          import json, os
+          issue = json.loads(os.environ["ISSUE"])
+          if "pull_request" in issue:
+              raise SystemExit(0)
+          with open("/tmp/issues.json", "w", encoding="utf-8") as f:
+              json.dump([issue], f)
+          print("payload: 1 issue #", issue.get("number"))
+          PY
 
+      - name: Prepare issue payload (full fetch)
+        if: github.event_name != 'issues'
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
           repo = os.environ["GITHUB_REPOSITORY"]
-
-          # 拉取该仓库全部 open + closed Issue（分页，最多 100/页）
+          token = os.environ["GITHUB_TOKEN"]
           issues = []
           for state in ("open", "closed"):
               page = 1
               while True:
-                  resp = requests.get(
-                      f"https://api.github.com/repos/{repo}/issues",
-                      params={"state": state, "per_page": 100, "page": page},
-                      headers={"Accept": "application/vnd.github+json"},
-                      timeout=30,
-                  )
-                  resp.raise_for_status()
-                  batch = [i for i in resp.json() if "pull_request" not in i]
+                  url = (f"https://api.github.com/repos/{repo}/issues"
+                         f"?state={state}&per_page=100&page={page}")
+                  req = urllib.request.Request(url, headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  })
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      batch = json.load(r)
+                  batch = [i for i in batch if "pull_request" not in i]
                   if not batch:
                       break
                   issues.extend(batch)
                   if len(batch) < 100:
                       break
                   page += 1
-
-          user_map = json.loads(os.environ.get("FEISHU_USER_MAP") or "{}")
-          client = FeishuClient(
-              os.environ["FEISHU_APP_ID"],
-              os.environ["FEISHU_APP_SECRET"],
-          )
-          board = client.issue_board.ensure(
-              "项目看板",
-              app_token=os.environ["FEISHU_APP_TOKEN"],
-          )
-          sync = client.github_issue_sync(
-              board,
-              config=IssueMapperConfig(user_map=user_map),
-          )
-          result = sync.sync_issues(issues)
-          print(f"synced: created={result.created} updated={result.updated}")
+          with open("/tmp/issues.json", "w", encoding="utf-8") as f:
+              json.dump(issues, f)
+          print("payload:", len(issues), "issues")
           PY
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync to Feishu
+        if: always()
+        run: |
+          if [ -f /tmp/issues.json ]; then
+            feishu-toolkit github-sync /tmp/issues.json
+          else
+            echo "跳过：无 issue 负载（可能是 PR 事件）"
+          fi
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_APP_TOKEN: ${{ secrets.FEISHU_APP_TOKEN }}
+          FEISHU_USER_MAP: ${{ secrets.FEISHU_USER_MAP }}
