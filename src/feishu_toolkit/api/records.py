@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional
 class RecordAPI:
     """记录的增删改查与批量操作。"""
 
+    # 人员字段统一使用 open_id（open_id 是「每个应用」独立的，跨应用不可用）
+    _USER_PARAMS = {"user_id_type": "open_id"}
+
     def __init__(self, client: Any) -> None:
         self._client = client
 
@@ -31,6 +34,7 @@ class RecordAPI:
         return self._client.post(
             self._prefix(app_token, table_id),
             json={"fields": fields},
+            params=self._USER_PARAMS,
         )
 
     def get(
@@ -56,6 +60,7 @@ class RecordAPI:
             "PUT",
             f"{self._prefix(app_token, table_id)}/{record_id}",
             json={"fields": fields},
+            params=self._USER_PARAMS,
         )
 
     def delete(self, app_token: str, table_id: str, record_id: str) -> Any:
@@ -76,6 +81,7 @@ class RecordAPI:
         return self._client.post(
             f"{self._prefix(app_token, table_id)}/batch_create",
             json={"records": records},
+            params=self._USER_PARAMS,
         )
 
     def batch_update(
@@ -88,6 +94,7 @@ class RecordAPI:
         return self._client.post(
             f"{self._prefix(app_token, table_id)}/batch_update",
             json={"records": records},
+            params=self._USER_PARAMS,
         )
 
     def batch_delete(
