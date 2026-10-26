@@ -220,7 +220,10 @@ class GitHubIssueMapper:
     # ---- 解析辅助 ----
 
     def _resolve_status(self, labels, issue, table, default_open: str) -> str:
-        if issue.get("state") == "closed":
+        # 大小写都认：GitHub REST API 返回小写 "closed"，
+        # 但 `gh issue list --json state` 返回大写 "CLOSED"。
+        # 只比小写的话，用 gh 导出的 payload 同步，所有 issue 都会被当成 open。
+        if str(issue.get("state") or "").lower() == "closed":
             return "已完成" if table is _REQ_STATUS else "已关闭"
         hit = self._match_table(labels, table)
         return hit or default_open

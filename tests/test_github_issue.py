@@ -50,3 +50,29 @@ class TestTitlePrefix:
 
         m = GitHubIssueMapper(IssueMapperConfig(parse_title_prefix=True))
         assert m.map(self._issue(1, "[Bug][P0] 崩了"))["table"] == "Bug 管理"
+
+
+class TestStateCase:
+    """state 大小写：REST 返回小写，gh CLI 返回大写。"""
+
+    @staticmethod
+    def _issue(state):
+        return {"number": 1, "title": "x", "state": state, "labels": []}
+
+    def test_uppercase_closed_is_closed(self):
+        from feishu_toolkit.adapters.github_issue import GitHubIssueMapper
+
+        m = GitHubIssueMapper()
+        assert m.map(self._issue("CLOSED"))["fields"]["状态"] == "已完成"
+
+    def test_lowercase_closed_is_closed(self):
+        from feishu_toolkit.adapters.github_issue import GitHubIssueMapper
+
+        m = GitHubIssueMapper()
+        assert m.map(self._issue("closed"))["fields"]["状态"] == "已完成"
+
+    def test_open_stays_open(self):
+        from feishu_toolkit.adapters.github_issue import GitHubIssueMapper
+
+        m = GitHubIssueMapper()
+        assert m.map(self._issue("OPEN"))["fields"]["状态"] == "待讨论"
