@@ -9,6 +9,16 @@
 去重键由档案的 ``key`` 指定（目标表里那个字段名），不存在时自动建一个
 数字字段。
 
+## 档案里的来源名
+
+来源名分两类：
+
+- **标准字段名**（见 ``adapters/github_issue.py`` 的产出）：需求名称、状态、
+  优先级、开始时间……
+- **保留名** ``提出人``：标准映射里没有这一项（需求表的「负责人」是
+  assignee），它取的是 **issue 作者**——「需求提出人」这类列要的正是这个。
+  需要 ``user_map`` 里有对应 open_id，否则跳过。
+
 ## 写单选字段的三条规则
 
 目标表往往有自己的一套词表（模板里的「开发中」在别的表里叫「开发交付中」）。
@@ -27,10 +37,15 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.fields import FieldType
+from ..cell_value import users
 from ..templates.board_profile import BoardProfile, TableProfile
 from .field_options import ensure_select_options
 from .github_issue import GitHubIssueMapper, IssueMapperConfig
 from .github_issue_sync import SyncResult
+
+# 档案里可以用的保留来源名：标准 mapper 不产出「谁提出的」，
+# 但「需求提出人」这类列要的正是 issue 作者，所以在这里单独解析。
+SOURCE_AUTHOR = "提出人"
 
 
 def _label_names(issue: Dict[str, Any]) -> List[str]:
@@ -167,6 +182,23 @@ class ProfileIssueSync:
                     if label in rule.labels:
                         out[target] = rule.labels[label]
                         break
+                continue
+
+            if source == SOURCE_AUTHOR:
+                # issue 作者（不是 assignee）：「需求提出人」要的是这个
+                author = issue.get("user") or {}
+                login = str(author.get("login") or "").lower()
+                open_id = self.mapper.config.user_map.get(login)
+                if not open_id:
+                    continue
+                target = rule.to or source
+                if target not in field_defs:
+                    warnings.append(
+                        f"#{issue['number']} 目标表没有字段「{target}」，"
+                        f"档案里 {source} → {target} 跳过了"
+                    )
+                    continue
+                out[target] = users([open_id])
                 continue
 
             if source not in semantic:

@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 import pytest
 
+from feishu_toolkit.adapters.github_issue import IssueMapperConfig
 from feishu_toolkit.adapters.profile_sync import ProfileIssueSync
 from feishu_toolkit.api.fields import FieldType
 from feishu_toolkit.templates.board_profile import BoardProfile
@@ -316,3 +317,51 @@ def test_missing_target_field_is_skipped_with_warning():
     rec = client.data["tbl1"]["records"][0]
     assert "不存在的一列" not in rec["fields"]
     assert any("不存在的一列" in w for w in result.warnings)
+
+
+def test_author_source_writes_issue_author():
+    """「提出人」取的是 issue 作者（不是 assignee）。"""
+    fields = DEFAULT_FIELDS + [
+        {"field_name": "需求提出人", "field_id": "f8", "type": FieldType.USER}
+    ]
+    client = FakeClient(_table(fields=fields))
+    profile = {
+        "tables": [
+            {
+                "name": "需求池",
+                "key": "Issue编号",
+                "fields": {"提出人": {"to": "需求提出人"}},
+            }
+        ]
+    }
+    issue = _issue(number=40, user={"login": "alice"})
+    ProfileIssueSync(
+        client,
+        "app1",
+        BoardProfile.from_dict(profile),
+        config=IssueMapperConfig(user_map={"alice": "ou_alice"}),
+    ).sync_issues([issue])
+    rec = client.data["tbl1"]["records"][0]
+    assert rec["fields"]["需求提出人"] == [{"id": "ou_alice"}]
+
+
+def test_author_source_skipped_without_user_map():
+    fields = DEFAULT_FIELDS + [
+        {"field_name": "需求提出人", "field_id": "f8", "type": FieldType.USER}
+    ]
+    client = FakeClient(_table(fields=fields))
+    profile = {
+        "tables": [
+            {
+                "name": "需求池",
+                "key": "Issue编号",
+                "fields": {"提出人": {"to": "需求提出人"}},
+            }
+        ]
+    }
+    issue = _issue(number=41, user={"login": "alice"})
+    ProfileIssueSync(
+        client, "app1", BoardProfile.from_dict(profile)
+    ).sync_issues([issue])
+    rec = client.data["tbl1"]["records"][0]
+    assert "需求提出人" not in rec["fields"]
