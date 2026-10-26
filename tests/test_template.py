@@ -58,8 +58,8 @@ def test_bug_status_options():
 def test_priority_options():
     req = _by_name(REQUIREMENT_TABLE)["优先级"]
     bug = _by_name(BUG_TABLE)["优先级"]
-    assert [o["name"] for o in _select_options(req)] == ["P0", "P1", "P2"]
-    assert [o["name"] for o in _select_options(bug)] == ["P0", "P1", "P2"]
+    assert [o["name"] for o in _select_options(req)] == ["P0", "P1", "P2", "P3"]
+    assert [o["name"] for o in _select_options(bug)] == ["P0", "P1", "P2", "P3"]
 
 
 def test_terminal_options():

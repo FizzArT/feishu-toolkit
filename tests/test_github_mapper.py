@@ -109,6 +109,22 @@ def test_default_priority_override(issue_factory):
     assert out["fields"]["优先级"] == "P2"
 
 
+def test_priority_p3(issue_factory):
+    out = _map(issue_factory(labels=["P3"]))
+    assert out["fields"]["优先级"] == "P3"
+
+
+def test_priority_lowest_beats_p2_substring(issue_factory):
+    """'priority:lowest' 是 P2 关键词 'priority:low' 的子串，精确匹配必须先判。"""
+    out = _map(issue_factory(labels=["priority:lowest"]))
+    assert out["fields"]["优先级"] == "P3"
+
+
+def test_priority_p2_still_low(issue_factory):
+    out = _map(issue_factory(labels=["priority:low"]))
+    assert out["fields"]["优先级"] == "P2"
+
+
 def test_version_from_milestone(issue_factory):
     out = _map(issue_factory(milestone="v2.0"))
     assert out["fields"]["迭代版本"] == "v2.0"

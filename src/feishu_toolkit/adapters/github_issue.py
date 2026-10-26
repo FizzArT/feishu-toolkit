@@ -48,6 +48,7 @@ _PRIORITY = {
     "P0": ("p0", "priority:high", "high", "urgent", "紧急", "高"),
     "P1": ("p1", "priority:medium", "medium", "中"),
     "P2": ("p2", "priority:low", "low", "低"),
+    "P3": ("p3", "priority:lowest", "lowest"),
 }
 
 # 终端
@@ -210,9 +211,18 @@ class GitHubIssueMapper:
 
     @staticmethod
     def _match_table(labels: List[str], table: Dict[str, List[str]]) -> Optional[str]:
+        """先精确匹配，再退化到子串匹配。
+
+        顺序不能反：``priority:lowest`` 是 P2 关键词 ``priority:low`` 的
+        子串，只做子串匹配的话 P3 会被 P2 抢走。
+        """
+        lowered = [lb.lower().strip() for lb in labels]
         for canonical, kws in table.items():
-            for lb in labels:
-                low = lb.lower().strip()
-                if any(k == low or k in low for k in kws):
+            for k in kws:
+                if k in lowered:
+                    return canonical
+        for canonical, kws in table.items():
+            for lb in lowered:
+                if any(k in lb for k in kws):
                     return canonical
         return None

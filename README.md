@@ -52,13 +52,13 @@
 从 GitHub 安装（按 Tag 锁定版本）：
 
 ```bash
-pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.1
+pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.2
 ```
 
 或在 `requirements.txt` 中：
 
 ```text
-feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.1
+feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.2
 ```
 
 ---
@@ -250,7 +250,7 @@ GitHubNotifier(WebhookNotifier(webhook)).notify_event(event)
 | 负责人 | 人员 | assignee（需 open_id 映射） |
 | 状态 | 单选 | 待讨论 / 待启动 / 设计中 / 开发中 / 验收中 / 已完成 |
 | 附件 | 附件 | 文件 |
-| 优先级 | 单选 | P0 / P1 / P2 |
+| 优先级 | 单选 | P0 / P1 / P2 / P3 |
 | 开始时间 | 日期 | Issue created_at |
 | 结束时间 | 日期 | Issue closed_at |
 
@@ -265,7 +265,7 @@ GitHubNotifier(WebhookNotifier(webhook)).notify_event(event)
 | 修复版本 | 单选 | V1.1 / V1.2 / 待排期 |
 | 终端 | 单选 | Web / iOS / Android / Windows / Mac |
 | 状态 | 单选 | 未解决 / 修复中 / 待验收 / 已关闭 |
-| 优先级 | 单选 | P0 / P1 / P2 |
+| 优先级 | 单选 | P0 / P1 / P2 / P3 |
 | 提交人 | 人员 | Issue author |
 | 指派人 | 人员 | assignee |
 | 创建时间 | 创建时间 | 自动记录 |
@@ -282,7 +282,7 @@ GitHubNotifier(WebhookNotifier(webhook)).notify_event(event)
 - **Bug 状态**：
   - `closed` → 已关闭；
   - open 时按标签：`修复/wip`→修复中，`待验收/review`→待验收，默认 `未解决`。
-- **优先级**：`P0/high/urgent/紧急`→P0，`P1/medium/中`→P1，`P2/low/低`→P2，默认 `P1`。
+- **优先级**：`P0/high/urgent/紧急`→P0，`P1/medium/中`→P1，`P2/low/低`→P2，`P3/lowest`→P3，默认 `P1`。
 - **版本**：优先取 milestone 标题，否则取标签中 `v` 开头且含数字的。
 - **终端**：标签含 `web/ios/android/windows/mac` 关键词。
 - **人员**：GitHub login（小写）→ 飞书 open_id，需通过 `user_map` 显式配置；未配置则跳过。
@@ -312,8 +312,12 @@ mapper 同时兼容中文别名。
 | `P0` | 紧急 / 最高 | P0 | `B60202` 深红 |
 | `P1` | 中（**默认**） | P1 | `FBCA04` 黄 |
 | `P2` | 低 | P2 | `0E8A16` 绿 |
+| `P3` | 最低 / 琐事 | P3 | `C5DEF5` 浅蓝 |
 
-> 兼容 `priority:high` / `high` / `urgent`、`priority:medium` / `medium`、`priority:low` / `low`。
+> 兼容 `priority:high` / `high` / `urgent`、`priority:medium` / `medium`、
+> `priority:low` / `low`、`priority:lowest` / `lowest`。
+> 关键词匹配**先精确后子串**——否则 `priority:lowest` 会被 P2 的
+> `priority:low` 抢走（它是子串）。
 
 ### 3. 可选：状态（Issue 仍 open 时用于推断阶段）
 
