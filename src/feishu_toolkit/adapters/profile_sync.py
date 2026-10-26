@@ -164,7 +164,10 @@ class ProfileIssueSync:
         field_defs: Dict[str, Dict[str, Any]],
     ) -> Tuple[Dict[str, Any], List[str]]:
         """标准字段 → 档案映射 → 目标字段。"""
-        semantic = self.mapper.map(issue)["fields"]
+        if table.variant == "auto":
+            semantic = self.mapper.map(issue)["fields"]
+        else:
+            semantic = self.mapper.map_as(issue, table.variant)["fields"]
         out: Dict[str, Any] = {}
         warnings: List[str] = []
 

@@ -42,6 +42,19 @@
 不是反过来。标准名来自 ``GitHubIssueMapper`` 的输出（中文，见
 ``adapters/github_issue.py``），目标名是目标表里的实际字段名。
 ``{"to": ...}`` 里的 ``to`` 明确标了方向，避免中文名对中文名时的歧义。
+
+## variant：一张表装所有 issue 时必须指定
+
+``TableProfile.variant`` 决定用哪套标准字段：
+
+- ``requirement`` —— 需求字段集（需求名称 / 状态 / 优先级 / 开始时间…）
+- ``bug`` —— Bug 字段集（Bug 描述 / 终端 / 提交人 / 指派人…）
+- ``auto`` —— 按标签自动判断（默认）
+
+**一张表装所有 issue 时要写 ``"variant": "requirement"``。**
+mapper 默认按标签判断需求还是 Bug，而「产品缺陷」这种**分类标签**里
+含有「缺陷」二字，会被判成 Bug——字段集整个换掉（需求名称 → Bug 描述），
+档案里的映射静默失效，标题列直接写不进去。
 """
 
 from __future__ import annotations
@@ -88,11 +101,24 @@ class FieldRule:
 
 @dataclass
 class TableProfile:
-    """一张目标表的档案。"""
+    """一张目标表的档案。
+
+    variant: 用哪套标准字段。
+
+    - ``"requirement"`` —— 需求字段集（需求名称 / 状态 / 优先级 / 开始时间…）
+    - ``"bug"`` —— Bug 字段集（Bug 描述 / 终端 / 提交人 / 指派人…）
+    - ``"auto"`` —— 按 issue 标签自动判断（默认）
+
+    为什么要显式指定：mapper 是**按标签**判断需求还是 Bug 的，而
+    「产品缺陷」这种**分类标签**里含有「缺陷」二字，会被判成 Bug。
+    单表档案（一张「需求池」装所有 issue）里字段集必须固定，
+    否则标题会落到「Bug 描述」上，映射静默失效。
+    """
 
     name: str
     key: str
     fields: Dict[str, FieldRule] = field(default_factory=dict)
+    variant: str = "auto"
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "TableProfile":
@@ -102,7 +128,18 @@ class TableProfile:
         rules: Dict[str, FieldRule] = {}
         for source, spec in (raw.get("fields") or {}).items():
             rules[source] = FieldRule.from_dict(spec or {})
-        return cls(name=str(raw.get("name", "")), key=str(key), fields=rules)
+        variant = str(raw.get("variant") or "auto")
+        if variant not in ("requirement", "bug", "auto"):
+            raise ValueError(
+                f"表「{raw.get('name', '?')}」的 variant 只能是 "
+                f"requirement / bug / auto，收到 {variant!r}"
+            )
+        return cls(
+            name=str(raw.get("name", "")),
+            key=str(key),
+            fields=rules,
+            variant=variant,
+        )
 
     def target_of(self, source: str) -> Optional[str]:
         """标准字段名 → 目标字段名。"""

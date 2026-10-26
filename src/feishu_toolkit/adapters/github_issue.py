@@ -90,6 +90,33 @@ class GitHubIssueMapper:
             return {"table": TABLE_BUG, "fields": self._map_bug(issue, labels)}
         return {"table": TABLE_REQUIREMENT, "fields": self._map_requirement(issue, labels)}
 
+    def map_as(
+        self, issue: Dict[str, Any], variant: str
+    ) -> Dict[str, Any]:
+        """按指定字段集映射，不看标签。
+
+        单表档案（比如一张「需求池」装所有 issue）必须用这个：
+        标签里带「缺陷」二字的**分类标签**（如「产品缺陷」）会被
+        :meth:`map` 判成 Bug，字段集整个换掉（需求名称 → Bug 描述），
+        档案里的映射就静默失效了。
+
+        Args:
+            issue: GitHub Issue 原始 JSON。
+            variant: ``"requirement"`` 或 ``"bug"``。
+
+        Returns:
+            {"table": 表名, "fields": {字段名: 值}}
+        """
+        labels = self._labels(issue)
+        if variant == "bug":
+            return {"table": TABLE_BUG, "fields": self._map_bug(issue, labels)}
+        if variant == "requirement":
+            return {
+                "table": TABLE_REQUIREMENT,
+                "fields": self._map_requirement(issue, labels),
+            }
+        raise ValueError(f"variant 只能是 requirement / bug，收到 {variant!r}")
+
     # ---- 需求映射 ----
 
     def _map_requirement(self, issue: Dict[str, Any], labels: List[str]) -> Dict[str, Any]:

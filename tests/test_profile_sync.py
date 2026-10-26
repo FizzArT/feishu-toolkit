@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from feishu_toolkit.adapters.github_issue import IssueMapperConfig
+from feishu_toolkit.adapters.github_issue import GitHubIssueMapper, IssueMapperConfig
 from feishu_toolkit.adapters.profile_sync import ProfileIssueSync
 from feishu_toolkit.api.fields import FieldType
 from feishu_toolkit.templates.board_profile import BoardProfile
@@ -317,6 +317,70 @@ def test_missing_target_field_is_skipped_with_warning():
     rec = client.data["tbl1"]["records"][0]
     assert "不存在的一列" not in rec["fields"]
     assert any("不存在的一列" in w for w in result.warnings)
+
+
+def test_label_containing_bug_keyword_still_routes_to_bug_by_default():
+    """默认 auto：「产品缺陷」含「缺陷」，mapper 会判成 Bug。"""
+    out = GitHubIssueMapper().map(
+        _issue(number=60, labels=[{"name": "产品缺陷"}])
+    )
+    assert out["table"] == "Bug 管理"
+    assert "Bug 描述" in out["fields"]
+
+
+def test_variant_requirement_overrides_label_based_routing():
+    """variant=requirement 时，分类标签不再影响字段集。"""
+    fields = DEFAULT_FIELDS + [
+        {"field_name": "需求提出人", "field_id": "f8", "type": FieldType.USER}
+    ]
+    client = FakeClient(_table(fields=fields))
+    profile = {
+        "tables": [
+            {
+                "name": "需求池",
+                "key": "Issue编号",
+                "variant": "requirement",
+                "fields": {"需求名称": {"to": "需求描述"}},
+            }
+        ]
+    }
+    issue = _issue(number=61, labels=[{"name": "产品缺陷"}])
+    ProfileIssueSync(
+        client, "app1", BoardProfile.from_dict(profile)
+    ).sync_issues([issue])
+    rec = client.data["tbl1"]["records"][0]
+    # 标题写进了「需求描述」，而不是因为被判成 Bug 就丢在「Bug 描述」上
+    assert rec["fields"]["需求描述"] == "接入飞书"
+
+
+def test_variant_bug_uses_bug_field_set():
+    fields = DEFAULT_FIELDS + [
+        {"field_name": "Bug 描述", "field_id": "f9", "type": FieldType.TEXT}
+    ]
+    client = FakeClient(_table(fields=fields))
+    profile = {
+        "tables": [
+            {
+                "name": "需求池",
+                "key": "Issue编号",
+                "variant": "bug",
+                "fields": {"Bug 描述": {"to": "Bug 描述"}},
+            }
+        ]
+    }
+    issue = _issue(number=62, labels=[{"name": "enhancement"}])
+    ProfileIssueSync(
+        client, "app1", BoardProfile.from_dict(profile)
+    ).sync_issues([issue])
+    rec = client.data["tbl1"]["records"][0]
+    assert rec["fields"]["Bug 描述"] == "接入飞书"
+
+
+def test_invalid_variant_rejected():
+    with pytest.raises(ValueError):
+        BoardProfile.from_dict(
+            {"tables": [{"name": "x", "key": "k", "variant": "nope"}]}
+        )
 
 
 def test_create_opt_in_allows_new_option():
