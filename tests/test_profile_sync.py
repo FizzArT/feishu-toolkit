@@ -319,6 +319,33 @@ def test_missing_target_field_is_skipped_with_warning():
     assert any("不存在的一列" in w for w in result.warnings)
 
 
+def test_create_opt_in_allows_new_option():
+    """档案里写 create: true 才允许往目标表里建新选项。"""
+    fields = [
+        f for f in DEFAULT_FIELDS if f["field_name"] != "优先级"
+    ] + [_select("f2", "优先级", ["P0", "P1", "P2"])]
+    client = FakeClient(_table(fields=fields))
+    profile = {
+        "tables": [
+            {
+                "name": "需求池",
+                "key": "Issue编号",
+                "fields": {"优先级": {"to": "优先级", "create": True}},
+            }
+        ]
+    }
+    issue = _issue(number=50, labels=[{"name": "P3"}])
+    ProfileIssueSync(
+        client, "app1", BoardProfile.from_dict(profile)
+    ).sync_issues([issue])
+    rec = client.data["tbl1"]["records"][0]
+    assert rec["fields"]["优先级"] == "P3"
+    field = next(
+        f for f in client.data["tbl1"]["fields"] if f["field_name"] == "优先级"
+    )
+    assert "P3" in [o["name"] for o in field["property"]["options"]]
+
+
 def test_author_source_writes_issue_author():
     """「提出人」取的是 issue 作者（不是 assignee）。"""
     fields = DEFAULT_FIELDS + [

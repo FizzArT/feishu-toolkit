@@ -61,11 +61,15 @@ class FieldRule:
     - ``{"to": "需求描述"}`` —— 改名写过去
     - ``{"to": "需求状态", "values": {...}}`` —— 改名且换值
     - ``{"labels": {"产品缺陷": "产品缺陷"}}`` —— 从 issue 标签取值
+
+    ``create`` 是例外开关：默认**不往目标表里塞词表外的选项**，
+    缺了就跳过并记 warning；显式写 ``"create": true`` 才允许自动建选项。
     """
 
     to: Optional[str] = None
     values: Dict[str, str] = field(default_factory=dict)
     labels: Dict[str, str] = field(default_factory=dict)
+    create: bool = False
 
     @property
     def is_label_rule(self) -> bool:
@@ -78,6 +82,7 @@ class FieldRule:
             to=raw.get("to"),
             values=dict(raw.get("values") or {}),
             labels=dict(raw.get("labels") or {}),
+            create=bool(raw.get("create") or False),
         )
 
 

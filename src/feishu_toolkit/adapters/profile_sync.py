@@ -221,6 +221,10 @@ class ProfileIssueSync:
             if self._is_select(field_defs, target) and not self._has_option(
                 field_defs, target, value
             ):
+                if rule.create:
+                    # 档案显式允许建选项
+                    out[target] = value
+                    continue
                 # 目标表没有这个选项，又没有显式映射：
                 # 宁可这一列不更新，也不在别人的表里塞一个词表外的选项
                 warnings.append(

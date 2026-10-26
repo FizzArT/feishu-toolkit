@@ -52,13 +52,13 @@
 从 GitHub 安装（按 Tag 锁定版本）：
 
 ```bash
-pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.2
+pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.3
 ```
 
 或在 `requirements.txt` 中：
 
 ```text
-feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.2
+feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.3
 ```
 
 ---
@@ -160,6 +160,7 @@ feishu-toolkit github-sync issues.json --profile .github/feishu-board.json
 | `{"to": "目标字段名"}` | 标准字段改名写过去 |
 | `{"to": "X", "values": {"标准值": "目标值"}}` | 改名 **且** 换值（两边词表不一致时用） |
 | `{"labels": {"标签名": "选项值"}}` | 不来自标准字段，直接拿 issue 的**标签**去匹配取值 |
+| `{"to": "优先级", "create": true}` | 额外允许**自动建选项**（默认不建，词表外一律跳过） |
 
 - 方向是 **标准字段名 → 目标字段名**（标准名见上面的「GitHub Issue 映射口径」）。
 - 额外有一个保留来源名 **`提出人`**：标准映射里没有（需求表的「负责人」是
