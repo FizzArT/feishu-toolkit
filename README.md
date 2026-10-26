@@ -52,13 +52,13 @@
 从 GitHub 安装（按 Tag 锁定版本）：
 
 ```bash
-pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.4
+pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.5
 ```
 
 或在 `requirements.txt` 中：
 
 ```text
-feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.4
+feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.5
 ```
 
 ---

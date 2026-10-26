@@ -42,7 +42,13 @@ def _load_issues(path: str) -> List[Dict[str, Any]]:
 def _config_from_env() -> IssueMapperConfig:
     user_map_raw = os.environ.get("FEISHU_USER_MAP", "{}")
     user_map = {str(k).lower(): str(v) for k, v in json.loads(user_map_raw).items()} if user_map_raw else {}
-    return IssueMapperConfig(user_map=user_map)
+    # 有的仓库不靠标签，把类型和优先级写进标题前缀（[Bug][P1] ...）。
+    # 默认关，免得把「[WIP] 修一下」这种标题误判。
+    prefix = os.environ.get("FEISHU_TITLE_PREFIX", "").strip().lower()
+    return IssueMapperConfig(
+        user_map=user_map,
+        parse_title_prefix=prefix in ("1", "true", "yes", "on"),
+    )
 
 
 def _client_from_env() -> FeishuClient:

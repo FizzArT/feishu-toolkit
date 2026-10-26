@@ -51,6 +51,15 @@ _PRIORITY = {
     "P3": ("p3", "priority:lowest", "lowest"),
 }
 
+# 类型（标题前缀 / 标签）
+_TITLE_TYPES = {
+    "Bug": ("bug", "缺陷", "错误", "故障"),
+    "Feature": ("feature", "enhancement", "需求", "功能"),
+    "Chore": ("chore", "杂务", "维护", "refactor"),
+    "Spike": ("spike", "调研", "研究"),
+    "Test": ("test", "测试"),
+}
+
 # 终端
 _TERMINAL = {
     "Web": ("web", "网页"),
@@ -67,11 +76,13 @@ class IssueMapperConfig:
 
     user_map: GitHub 登录名（小写）→ 飞书 open_id。
     default_priority: 无法识别时的默认优先级。
+    parse_title_prefix: 从标题前缀（``[Bug][P1] xxx``）取类型和优先级。
     """
 
     user_map: Dict[str, str] = field(default_factory=dict)
     default_priority: str = "P1"
     include_link_in_description: bool = True
+    parse_title_prefix: bool = False
 
 
 class GitHubIssueMapper:
@@ -86,9 +97,40 @@ class GitHubIssueMapper:
         """返回 {"table": 表名, "fields": {字段名: 值}}。"""
         labels = self._labels(issue)
         is_bug = self._match(labels, _BUG_KEYWORDS)
+        if not is_bug and self.config.parse_title_prefix:
+            # 有些仓库不靠标签，把类型写进标题前缀（[Bug][P1] ...）
+            is_bug = self.title_type(issue) == "Bug"
         if is_bug:
             return {"table": TABLE_BUG, "fields": self._map_bug(issue, labels)}
         return {"table": TABLE_REQUIREMENT, "fields": self._map_requirement(issue, labels)}
+
+    # ---- 标题前缀 ----
+
+    @staticmethod
+    def title_prefixes(issue: Dict[str, Any]) -> List[str]:
+        """取出标题开头的方括号前缀：``[Bug][P1] xxx`` → ``["Bug", "P1"]``。
+
+        只认**开头连续的**方括号组。标题中间出现的 ``[xxx]`` 不算，
+        否则「修掉 [WIP] 标记」这种标题会被误读。
+        """
+        title = str(issue.get("title") or "").strip()
+        out: List[str] = []
+        rest = title
+        while rest.startswith("["):
+            end = rest.find("]")
+            if end <= 0:
+                break
+            out.append(rest[1:end].strip())
+            rest = rest[end + 1 :].lstrip()
+        return out
+
+    def title_type(self, issue: Dict[str, Any]) -> Optional[str]:
+        """从标题前缀取类型：``[Bug]`` → ``Bug``。取不到返回 None。"""
+        for tag in self.title_prefixes(issue):
+            canonical = self._match_table([tag], _TITLE_TYPES)
+            if canonical:
+                return canonical
+        return None
 
     def map_as(
         self, issue: Dict[str, Any], variant: str
@@ -124,11 +166,15 @@ class GitHubIssueMapper:
             "需求名称": cv.text(issue["title"]),
             "Issue编号": issue["number"],
             "状态": cv.single_select(self._resolve_status(labels, issue, _REQ_STATUS, "待讨论")),
-            "优先级": cv.single_select(self._resolve_priority(labels)),
+            "优先级": cv.single_select(self._resolve_priority(labels, issue)),
         }
         body = self._build_body(issue)
         if body:
             fields["需求描述"] = cv.text(body)
+
+        kind = self._resolve_type(issue, labels)
+        if kind:
+            fields["类型"] = cv.single_select(kind)
 
         version = self._resolve_version(labels, issue)
         if version:
@@ -153,7 +199,7 @@ class GitHubIssueMapper:
             "Bug 描述": cv.text(issue["title"]),
             "Issue编号": issue["number"],
             "状态": cv.single_select(self._resolve_status(labels, issue, _BUG_STATUS, "未解决")),
-            "优先级": cv.single_select(self._resolve_priority(labels)),
+            "优先级": cv.single_select(self._resolve_priority(labels, issue)),
         }
         version = self._resolve_version(labels, issue)
         if version:
@@ -179,8 +225,36 @@ class GitHubIssueMapper:
         hit = self._match_table(labels, table)
         return hit or default_open
 
-    def _resolve_priority(self, labels: List[str]) -> str:
-        return self._match_table(labels, _PRIORITY) or self.config.default_priority
+    def _resolve_priority(self, labels: List[str], issue: Optional[Dict[str, Any]] = None) -> str:
+        """优先级：开了标题前缀解析时**标题优先**，其次标签，最后默认值。
+
+        为什么标题优先：打开这个开关的仓库，分类就写在标题里
+        （``[Bug][P1] xxx``），标签要么没打、要么是历史遗留。
+        实测 alphadeck 的 48 个 issue 里只有 13 个带标签，且标签与标题
+        冲突（标题 ``[Chore]`` + 标签 ``enhancement``）——标签优先会把
+        类型判错。关掉开关时行为完全不变，只看标签。
+        """
+        if issue is not None and self.config.parse_title_prefix:
+            for tag in self.title_prefixes(issue):
+                canonical = self._match_table([tag], _PRIORITY)
+                if canonical:
+                    return canonical
+        return (
+            self._match_table(labels, _PRIORITY)
+            or self.config.default_priority
+        )
+
+    def _resolve_type(self, issue: Dict[str, Any], labels: List[str]) -> Optional[str]:
+        """issue 类型：开了标题前缀解析时标题优先，其次标签。
+
+        只有开了 ``parse_title_prefix`` 才看标题——默认行为不变，
+        免得把「[WIP] 修一下」这种标题误判成类型。
+        """
+        if self.config.parse_title_prefix:
+            kind = self.title_type(issue)
+            if kind:
+                return kind
+        return self._match_table(labels, _TITLE_TYPES)
 
     def _resolve_version(self, labels: List[str], issue: Dict[str, Any]) -> Optional[str]:
         # 优先 milestone
