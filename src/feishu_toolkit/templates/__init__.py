@@ -1,5 +1,6 @@
 """标准看板模板与同步服务：统一字段、选项、视图与幂等创建。"""
 
+from .board_profile import BoardProfile, FieldRule, TableProfile
 from .board_service import BoardRef, BoardService
 from .requirements_bug_board import (
     BUG_TABLE,
@@ -12,6 +13,9 @@ from .requirements_bug_board import (
 __all__ = [
     "BoardService",
     "BoardRef",
+    "BoardProfile",
+    "TableProfile",
+    "FieldRule",
     "STANDARD_BOARD",
     "REQUIREMENT_TABLE",
     "REQUIREMENT_VIEWS",

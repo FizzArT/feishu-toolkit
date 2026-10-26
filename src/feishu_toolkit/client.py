@@ -9,8 +9,8 @@ from .auth import TokenManager
 from .errors import FeishuConfigError
 from .http import HttpClient
 from .api import BaseAPI, FieldAPI, MessageAPI, RecordAPI, TableAPI, ViewAPI
-from .templates import BoardService
-from .adapters import GitHubIssueSync, IssueMapperConfig
+from .templates import BoardProfile, BoardService
+from .adapters import GitHubIssueSync, IssueMapperConfig, ProfileIssueSync
 from .notifier import GitHubNotifier, Notifier
 
 DEFAULT_BASE_URL = "https://open.feishu.cn"
@@ -69,6 +69,16 @@ class FeishuClient:
     def github_issue_sync(self, board_ref, *, config: Optional[IssueMapperConfig] = None) -> GitHubIssueSync:
         """针对某个标准看板构建 GitHub Issue 同步器。"""
         return GitHubIssueSync(self, board_ref, config=config)
+
+    def profile_issue_sync(
+        self,
+        app_token: str,
+        profile: BoardProfile,
+        *,
+        config: Optional[IssueMapperConfig] = None,
+    ) -> ProfileIssueSync:
+        """按看板档案构建同步器（写入任意已有表）。"""
+        return ProfileIssueSync(self, app_token, profile, config=config)
 
     def github_notifier(self, *, config: Optional[IssueMapperConfig] = None) -> GitHubNotifier:
         """构建 GitHub Issue 事件通知器（应用身份，发群用 chat_id）。"""

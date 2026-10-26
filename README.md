@@ -35,6 +35,7 @@
 | 标准看板模板 | 固定字段、单选项、数字配色、视图（表格 / 看板 / 甘特 / 表单） |
 | GitHub 适配器 | GitHub Issue → 标准字段（分类 / 状态 / 优先级 / 版本 / 终端 / 人员） |
 | 同步服务 | 幂等 `upsert`（按 Issue 编号），批量按表分组 |
+| 看板档案 | 把字段名 / 单选词表的差异写进 JSON，写入**任意已有表**（`describe` 先 dump 真实结构） |
 | 消息 / 通知 | 应用身份（IM API）与自定义群机器人（webhook），文本 / 交互卡片 |
 | GitHub 事件通知 | Issue 事件 → 交互卡片（按动作配色，含状态 / 优先级 / 跳转按钮） |
 
@@ -51,13 +52,13 @@
 从 GitHub 安装（按 Tag 锁定版本）：
 
 ```bash
-pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.0
+pip install git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.1
 ```
 
 或在 `requirements.txt` 中：
 
 ```text
-feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.0
+feishu-toolkit @ git+https://github.com/FizzArT/feishu-toolkit.git@v0.1.1
 ```
 
 ---
@@ -100,7 +101,75 @@ print(result.created, result.updated)
 
 `同步是幂等的`：以「Issue编号」为关联键，看板中没有则新建、已有则更新，重复运行不会产生重复记录。
 
-### 3. 也可以直接操作底层资源
+### 3. 写入已有的自定义表（看板档案）
+
+标准看板的字段名是固定的。如果要写进**别人建好的表**（字段名、选项都不一样），
+用一份**看板档案**把差异挪到数据里，代码不用动。
+
+**第一步：先看真实的表结构**（别照着记忆写档案）：
+
+```bash
+export FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx FEISHU_APP_TOKEN=bascnXXXX
+feishu-toolkit describe                    # 全部表
+feishu-toolkit describe --table 需求池     # 只看一张
+```
+
+输出里能看到每张表的 `field_name` / `type` / 单选的 `options`，照着写档案。
+
+**第二步：写档案**（例如 `.github/feishu-board.json`）：
+
+```json
+{
+  "tables": [
+    {
+      "name": "需求池",
+      "key": "Issue编号",
+      "fields": {
+        "需求名称": {"to": "需求描述"},
+        "状态": {"to": "需求状态", "values": {
+          "待讨论": "待评估",
+          "待启动": "待评估",
+          "设计中": "方案设计中",
+          "开发中": "开发交付中",
+          "验收中": "验收中",
+          "已完成": "已完成"
+        }},
+        "优先级": {"to": "优先级"},
+        "负责人": {"to": "需求提出人"},
+        "开始时间": {"to": "需求提出日期"},
+        "需求分类": {"to": "需求分类", "labels": {
+          "产品缺陷": "产品缺陷",
+          "资源支持": "资源支持"
+        }}
+      }
+    }
+  ]
+}
+```
+
+**第三步：同步**
+
+```bash
+feishu-toolkit github-sync issues.json --profile .github/feishu-board.json
+```
+
+档案的规则：
+
+| 写法 | 含义 |
+|---|---|
+| `{"to": "目标字段名"}` | 标准字段改名写过去 |
+| `{"to": "X", "values": {"标准值": "目标值"}}` | 改名 **且** 换值（两边词表不一致时用） |
+| `{"labels": {"标签名": "选项值"}}` | 不来自标准字段，直接拿 issue 的**标签**去匹配取值 |
+
+- 方向是 **标准字段名 → 目标字段名**（标准名见上面的「GitHub Issue 映射口径」）。
+- 没在 `fields` 里列出的标准字段**不写**，不会把「需求描述」硬塞进只认四列的表。
+- `key` 是去重键（幂等匹配），字段不存在会自动建一个数字字段。
+- 写单选字段时：档案里 `values` 映射过的值直接写并自动建选项；目标表**已有**的选项原样写；
+  其余情况**这一列不更新**并记一条 warning——不在别人的表里塞词表外的选项。
+
+同步结果里有 `warnings`，CI 里可以直接看到「哪一列没写、为什么」。
+
+### 4. 也可以直接操作底层资源
 
 ```python
 # 新建一个空 Base
@@ -126,7 +195,7 @@ client.records.create(app_token, table["table_id"], {
 })
 ```
 
-### 4. 推送通知到飞书群
+### 5. 推送通知到飞书群
 
 **方式 A：自定义群机器人（最简单，无需应用权限）**
 
@@ -337,8 +406,8 @@ feishu-toolkit/
 │   ├── errors.py          # 统一异常
 │   ├── cell_value.py      # 单元格值构造
 │   ├── api/               # 资源层：base/table/field/record/view/message
-│   ├── templates/         # 标准看板模板 + 看板服务
-│   ├── adapters/          # GitHub Issue 适配器 + 同步服务
+│   ├── templates/         # 标准看板模板 + 看板服务 + 看板档案
+│   ├── adapters/          # GitHub Issue 适配器 + 同步服务（标准 / 按档案）
 │   └── notifier/          # 卡片构建 + 通知器（应用 / webhook）
 └── tests/                 # 单元测试
 ```

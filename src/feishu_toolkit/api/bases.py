@@ -43,12 +43,16 @@ class BaseAPI:
     ) -> Dict[str, Any]:
         """搜索当前应用可见的 Base。
 
+        **这个接口只接受 GET。** POST 会命中路由层的 404
+        （响应体是纯文本 ``404 page not found``，不是飞书的 JSON 错误），
+        排查时很容易误判成「权限不足」。
+
         Returns:
             包含 items / has_more / page_token 的字典。
         """
-        body: Dict[str, Any] = {"page_size": page_size}
+        params: Dict[str, Any] = {"page_size": page_size}
         if query:
-            body["query"] = query
+            params["query"] = query
         if page_token:
-            body["page_token"] = page_token
-        return self._client.post("/open-apis/bitable/v1/apps/search", json=body)
+            params["page_token"] = page_token
+        return self._client.get("/open-apis/bitable/v1/apps/search", params=params)

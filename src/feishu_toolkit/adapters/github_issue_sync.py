@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from ..api.fields import FieldType
+from .field_options import ensure_select_options
 from .github_issue import (
     GitHubIssueMapper,
     IssueMapperConfig,
@@ -29,10 +29,13 @@ class SyncResult:
     created: int = 0
     updated: int = 0
     record_ids: List[str] = None
+    warnings: List[str] = None
 
     def __post_init__(self) -> None:
         if self.record_ids is None:
             self.record_ids = []
+        if self.warnings is None:
+            self.warnings = []
 
 
 class GitHubIssueSync:
@@ -116,44 +119,8 @@ class GitHubIssueSync:
     def _ensure_select_options(
         self, app: str, tid: str, field_maps: List[Dict[str, Any]]
     ) -> None:
-        """批量写入前，显式创建单选字段中缺失的选项。
-
-        批量 batch_create 对「自动新建单选选项」处理不稳定（偶发 1254060），
-        因此先读取字段定义，把将要用到、但尚不存在的选项通过字段更新接口建好。
-        """
-        if not field_maps:
-            return
-        fields = {f["field_name"]: f for f in self._client.fields.list(app, tid)}
-        # 收集每个单选字段需要的选项值
-        needed: Dict[str, set] = {}
-        for fmap in field_maps:
-            for key, val in fmap.items():
-                fdef = fields.get(key)
-                if (
-                    fdef
-                    and fdef.get("type") == FieldType.SINGLE_SELECT
-                    and isinstance(val, str)
-                ):
-                    needed.setdefault(key, set()).add(val)
-        for name, values in needed.items():
-            fdef = fields[name]
-            prop = fdef.get("property") or {}
-            options = list(prop.get("options", []))
-            existing = {o["name"] for o in options}
-            for val in values:
-                if val not in existing:
-                    options.append({"name": val})
-            if len(options) > len(prop.get("options", [])):
-                self._client.fields.update(
-                    app,
-                    tid,
-                    fdef["field_id"],
-                    {
-                        "field_name": name,
-                        "type": fdef["type"],
-                        "property": {"options": options},
-                    },
-                )
+        """批量写入前，显式创建单选字段中缺失的选项。"""
+        ensure_select_options(self._client, app, tid, field_maps)
 
     def _build_index(self, app: str, tid: str) -> Dict[int, str]:
         """读取表内全部记录，建立 Issue编号 → record_id 索引。"""
